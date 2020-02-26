@@ -43,8 +43,12 @@ module ReceptorController
     # @param receiver [Object] any object implementing callbacks
     # @param response_callback [Symbol] name of receiver's method processing responses
     # @param timeout_callback [Symbol] name of receiver's method processing timeout [optional]
-    def register_message(msg_id, receiver, response_callback: :response_received, timeout_callback: :response_timeout)
-      registered_messages[msg_id] = {:receiver => receiver, :response_callback => response_callback, :timeout_callback => timeout_callback, :registered_at => Time.now.utc}
+    def register_message(msg_id, receiver, response_callback: :response_success, timeout_callback: :response_timeout, error_callback: :response_error)
+      registered_messages[msg_id] = {:receiver          => receiver,
+                                     :response_callback => response_callback,
+                                     :timeout_callback  => timeout_callback,
+                                     :error_callback    => error_callback,
+                                     :registered_at     => Time.now.utc}
     end
 
     private
@@ -66,28 +70,33 @@ module ReceptorController
 
     def process_message(message)
       response = JSON.parse(message.payload)
-      if response['code'] == 0
-        message_id = response['in_response_to']
-        # message_type: "response" (with data) or
-        #               "eof"(without data)
-        message_type = response['message_type']
 
-        if message_id
-          if (callbacks = registered_messages[message_id]).present?
+      if (message_id = response['in_response_to'])
+        if (callbacks = registered_messages[message_id]).present?
+          if response['code'] == 0
+            #
+            # Response OK
+            #
+            message_type = response['message_type'] # "response" (with data) or "eof" (without data)
             registered_messages.delete(message_id) if message_type == 'eof'
-            # Callback to sender
             callbacks[:receiver].send(callbacks[:response_callback], message_id, message_type, response['payload'])
+          else
+            #
+            # Response Error
+            #
+            registered_messages.delete(message_id)
+            callbacks[:receiver].send(callbacks[:error_callback], message_id, response['code'])
           end
         else
-          raise "Message id (in_response_to) not received! #{response}"
+          # noop, it's not error if not registered, can be processed by another pod
         end
       else
-        logger.error("Receptor_satellite:health_check directive failed in receptor_client node #{response['sender']}")
+        logger.error("Receptor response: Message id (in_response_to) not received! #{response}")
       end
     rescue JSON::ParserError => e
-      logger.error("Failed to parse Kafka response (#{e.message})\n#{message.payload}")
+      logger.error("Receptor response: Failed to parse Kafka response (#{e.message})\n#{message.payload}")
     rescue => e
-      logger.error("#{e}\n#{e.backtrace.join("\n")}")
+      logger.error("Receptor response: #{e}\n#{e.backtrace.join("\n")}")
     end
 
     def check_timeouts(threshold = config.response_timeout)
@@ -129,7 +138,7 @@ module ReceptorController
         :host       => config.queue_host,
         :port       => config.queue_port,
         :protocol   => :Kafka,
-        :client_ref => "tp-inventory-receptor_client-responses-#{Time.now.to_i}", # A reference string to identify the client
+        :client_ref => "receptor_client-responses-#{Time.now.to_i}", # A reference string to identify the client
       }
     end
   end
