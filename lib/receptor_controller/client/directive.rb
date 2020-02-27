@@ -6,7 +6,7 @@ module ReceptorController
 
     delegate :config, :logger, :receptor_log_msg, :response_worker, :to => :client
 
-    EOF_MESSAGE_TYPE = 'eof'.freeze
+    MESSAGE_TYPE_RESPONSE, MESSAGE_TYPE_EOF = 'response', 'eof'.freeze
 
     def initialize(name:, account:, node_id:, payload:, client:)
       self.account         = account
@@ -16,48 +16,17 @@ module ReceptorController
       self.payload         = payload
     end
 
-    def call
+    def call(_body = default_body)
       raise NotImplementedError, "#{__method__} must be implemented in a subclass"
     end
 
-    def on_success(&block)
-      @on_response ||= []
-      @on_response << block if block_given?
-      @on_response
-    end
-
-    def on_eof(&block)
-      @on_eof ||= []
-      @on_eof << block if block_given?
-      @on_eof
-    end
-
-    def on_timeout(&block)
-      @on_timeout ||= []
-      @on_timeout << block if block_given?
-      @on_timeout
-    end
-
-    def on_error(&block)
-      @on_error ||= []
-      @on_error << block if block_given?
-      @on_error
-    end
-
-    def response_success(msg_id, message_type, response)
-      if message_type == EOF_MESSAGE_TYPE
-        on_eof.each { |block| block.call(msg_id) }
-      else
-        on_success.each { |block| block.call(msg_id, response) }
-      end
-    end
-
-    def response_error(msg_id, response_code)
-      on_error.each { |block| block.call(msg_id, response_code) }
-    end
-
-    def response_timeout(msg_id)
-      on_timeout.each { |block| block.call(msg_id) }
+    def default_body
+      {
+        :account   => account,
+        :recipient => node_id,
+        :payload   => payload,
+        :directive => name
+      }
     end
   end
 end
