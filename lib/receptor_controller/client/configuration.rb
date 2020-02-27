@@ -29,7 +29,7 @@ module ReceptorController
       @queue_topic       = 'platform.receptor-controller.responses'
 
       @response_timeout           = 2.minutes
-      @response_timeout_poll_time = 10.seconds
+      @response_timeout_poll_time = 10.seconds # TODO: use condition variable?
 
       yield(self) if block_given?
     end

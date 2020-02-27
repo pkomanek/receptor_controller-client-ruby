@@ -4,6 +4,7 @@ require "manageiq-messaging"
 module ReceptorController
   class Client
     require "receptor_controller/client/configuration"
+    require "receptor_controller/client/exception"
     require "receptor_controller/client/response_worker"
     require "receptor_controller/client/directive_blocking"
     require "receptor_controller/client/directive_non_blocking"

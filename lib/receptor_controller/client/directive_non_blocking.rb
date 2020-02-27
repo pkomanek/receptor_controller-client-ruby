@@ -2,6 +2,15 @@ require "receptor_controller/client/directive"
 
 module ReceptorController
   class Client::DirectiveNonBlocking < Client::Directive
+    def initialize(name:, account:, node_id:, payload:, client:)
+      super
+
+      @success_callbacks = []
+      @eof_callbacks = []
+      @timeout_callbacks = []
+      @error_callbacks = []
+    end
+
     def call(body = default_body)
       response = Faraday.post(config.job_url, body.to_json, client.headers)
       if response.success?
@@ -21,43 +30,39 @@ module ReceptorController
     end
 
     def on_success(&block)
-      @on_response ||= []
-      @on_response << block if block_given?
-      @on_response
+      @success_callbacks << block if block_given?
+      self
     end
 
     def on_eof(&block)
-      @on_eof ||= []
-      @on_eof << block if block_given?
-      @on_eof
+      @eof_callbacks << block if block_given?
+      self
     end
 
     def on_timeout(&block)
-      @on_timeout ||= []
-      @on_timeout << block if block_given?
-      @on_timeout
+      @timeout_callbacks << block if block_given?
+      self
     end
 
     def on_error(&block)
-      @on_error ||= []
-      @on_error << block if block_given?
-      @on_error
+      @error_callbacks << block if block_given?
+      self
     end
 
     def response_success(msg_id, message_type, response)
       if message_type == MESSAGE_TYPE_EOF
-        on_eof.each { |block| block.call(msg_id) }
+        @eof_callbacks.each { |block| block.call(msg_id) }
       else
-        on_success.each { |block| block.call(msg_id, response) }
+        @success_callbacks.each { |block| block.call(msg_id, response) }
       end
     end
 
     def response_error(msg_id, response_code)
-      on_error.each { |block| block.call(msg_id, response_code) }
+      @error_callbacks.each { |block| block.call(msg_id, response_code) }
     end
 
     def response_timeout(msg_id)
-      on_timeout.each { |block| block.call(msg_id) }
+      @timeout_callbacks.each { |block| block.call(msg_id) }
     end
   end
 end

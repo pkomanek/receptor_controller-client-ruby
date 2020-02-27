@@ -85,7 +85,7 @@ module ReceptorController
             # Response Error
             #
             registered_messages.delete(message_id)
-            callbacks[:receiver].send(callbacks[:error_callback], message_id, response['code'])
+            callbacks[:receiver].send(callbacks[:error_callback], message_id, response['code'], response['payload'])
           end
         else
           # noop, it's not error if not registered, can be processed by another pod
